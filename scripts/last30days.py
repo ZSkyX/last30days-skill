@@ -37,6 +37,7 @@ from lib import (
     render,
     schema,
     score,
+    ui,
     xai_x,
 )
 
@@ -59,6 +60,7 @@ def run_research(
     to_date: str,
     depth: str = "default",
     mock: bool = False,
+    progress: ui.ProgressDisplay = None,
 ) -> tuple:
     """Run the research pipeline.
 
@@ -75,6 +77,9 @@ def run_research(
 
     # Reddit search via OpenAI
     if sources in ("both", "reddit"):
+        if progress:
+            progress.start_reddit()
+
         if mock:
             raw_openai = load_fixture("openai_sample.json")
         else:
@@ -86,31 +91,47 @@ def run_research(
                     depth=depth,
                 )
             except http.HTTPError as e:
-                print(f"[REDDIT ERROR] OpenAI API request failed: {e}", flush=True)
-                if e.body:
-                    print(f"[REDDIT ERROR] Response body: {e.body[:500]}", flush=True)
+                if progress:
+                    progress.show_error(f"Reddit API failed: {e}")
                 raw_openai = {"error": str(e)}
                 reddit_error = f"API error: {e}"
             except Exception as e:
-                print(f"[REDDIT ERROR] Unexpected error: {type(e).__name__}: {e}", flush=True)
+                if progress:
+                    progress.show_error(f"Reddit error: {e}")
                 raw_openai = {"error": str(e)}
                 reddit_error = f"{type(e).__name__}: {e}"
 
         # Parse response
         reddit_items = openai_reddit.parse_reddit_response(raw_openai)
 
-        # Enrich with real Reddit data
-        for i, item in enumerate(reddit_items):
-            if mock:
-                mock_thread = load_fixture("reddit_thread_sample.json")
-                reddit_items[i] = reddit_enrich.enrich_reddit_item(item, mock_thread)
-            else:
-                reddit_items[i] = reddit_enrich.enrich_reddit_item(item)
+        if progress:
+            progress.end_reddit(len(reddit_items))
 
-            raw_reddit_enriched.append(reddit_items[i])
+        # Enrich with real Reddit data
+        if reddit_items:
+            if progress:
+                progress.start_reddit_enrich(1, len(reddit_items))
+
+            for i, item in enumerate(reddit_items):
+                if progress and i > 0:
+                    progress.update_reddit_enrich(i + 1, len(reddit_items))
+
+                if mock:
+                    mock_thread = load_fixture("reddit_thread_sample.json")
+                    reddit_items[i] = reddit_enrich.enrich_reddit_item(item, mock_thread)
+                else:
+                    reddit_items[i] = reddit_enrich.enrich_reddit_item(item)
+
+                raw_reddit_enriched.append(reddit_items[i])
+
+            if progress:
+                progress.end_reddit_enrich()
 
     # X search via xAI
     if sources in ("both", "x"):
+        if progress:
+            progress.start_x()
+
         if mock:
             raw_xai = load_fixture("xai_sample.json")
         else:
@@ -125,6 +146,9 @@ def run_research(
 
         # Parse response
         x_items = xai_x.parse_x_response(raw_xai)
+
+        if progress:
+            progress.end_x(len(x_items))
 
     return reddit_items, x_items, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error
 
@@ -207,10 +231,15 @@ def main():
 
     # Check cache (unless refresh or mock)
     cache_key = cache.get_cache_key(args.topic, from_date, to_date, f"{sources}:{depth}")
+
+    # Initialize progress display
+    progress = ui.ProgressDisplay(args.topic, show_banner=True)
+
     if not args.refresh and not args.mock:
         cached = cache.load_cache(cache_key)
         if cached:
             # Use cached data
+            progress.show_cached()
             report = schema.Report.from_dict(cached)
             output_result(report, args.emit)
             return
@@ -250,7 +279,11 @@ def main():
         to_date,
         depth,
         args.mock,
+        progress,
     )
+
+    # Processing phase
+    progress.start_processing()
 
     # Normalize items
     normalized_reddit = normalize.normalize_reddit_items(reddit_items, from_date, to_date)
@@ -267,6 +300,8 @@ def main():
     # Dedupe items
     deduped_reddit = dedupe.dedupe_reddit(sorted_reddit)
     deduped_x = dedupe.dedupe_x(sorted_x)
+
+    progress.end_processing()
 
     # Create report
     report = schema.create_report(
@@ -291,6 +326,9 @@ def main():
     # Cache the result (if not mock)
     if not args.mock:
         cache.save_cache(cache_key, report.to_dict())
+
+    # Show completion
+    progress.show_complete(len(deduped_reddit), len(deduped_x))
 
     # Output result
     output_result(report, args.emit)
