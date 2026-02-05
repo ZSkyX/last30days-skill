@@ -47,65 +47,86 @@ Common patterns:
 
 ---
 
-## Payment Setup (x402)
+## CRITICAL: First Action After Parsing
 
-This skill uses x402 payments via FluxA Agent Wallet CLI. No API keys required.
+**IMMEDIATELY after parsing user intent, you MUST ask for payment consent.**
 
-**Cost:** ~$0.03 per research (Reddit ~$0.02 + X ~$0.01)
+DO NOT skip to WebSearch. DO NOT start searching. Your FIRST action must be:
 
-The skill works in two modes:
-1. **Full Mode** (with x402 payment): Reddit + X + WebSearch - best results with engagement metrics
-2. **Web-Only Mode** (no payment): WebSearch only - still useful, but no engagement metrics
+```
+Use AskUserQuestion tool to ask:
+"To search Reddit and X with real engagement metrics, I need to make a small payment (~$0.03). Continue?"
+Options: ["Yes, make payment", "No, use free web search only"]
+```
+
+If user selects "Yes" → Continue to x402 Payment Flow below
+If user selects "No" → Skip to "Web-Only Fallback" section
 
 ---
 
-## Research Execution
+## x402 Payment Flow (Primary Path)
 
-**Step 1: Ask user for payment consent**
+This skill uses x402 payments via FluxA Agent Wallet CLI. No API keys required.
+**Cost:** ~$0.03 per research (Reddit ~$0.02 + X ~$0.01)
 
-Before making paid API calls, ask the user:
-"To search Reddit and X with real engagement metrics, I need to make a small payment (~$0.03). Continue?"
+### Step 1: Create budget mandate
 
-If user declines, skip to Step 5 (WebSearch only mode).
-
-**Step 2: Create budget mandate**
-
-Request a budget mandate for the research (~$0.05 to cover both searches with buffer):
+Run this command from the skill directory:
 
 ```bash
-node ./fluxa-wallet/scripts/fluxa-cli.bundle.js mandate-create \
-  --desc "Research topic on Reddit and X" \
+cd ~/.claude/skills/last30days && node ./fluxa-wallet/scripts/fluxa-cli.bundle.js mandate-create \
+  --desc "Research: $TOPIC" \
   --amount 50000
 ```
 
-Save the `mandateId` from the response. Ask user to approve the mandate at the provided URL.
+From the response, save the `mandateId`. Tell user to approve the mandate at the provided URL.
 
-Wait ~10 seconds, then check status:
+Wait for user confirmation, then check status:
 ```bash
-node ./fluxa-wallet/scripts/fluxa-cli.bundle.js mandate-status --id <mandate-id>
+cd ~/.claude/skills/last30days && node ./fluxa-wallet/scripts/fluxa-cli.bundle.js mandate-status --id <mandate-id>
 ```
 
-**Step 3: Get 402 payload and make payments**
+### Step 2: Get Reddit 402 payload
 
-For Reddit search, first get the 402 payload:
 ```bash
 curl -s -X POST https://proxy-monetize.fluxapay.xyz/api/openai-api-endpoints/v1/responses \
   -H "Content-Type: application/json" \
-  -d '{"model":"gpt-4o","tools":[{"type":"web_search","filters":{"allowed_domains":["reddit.com"]}}],"input":"Search Reddit for: TOPIC"}'
+  -d '{"model":"gpt-4o","tools":[{"type":"web_search","filters":{"allowed_domains":["reddit.com"]}}],"input":"Search Reddit for: $TOPIC"}'
 ```
 
-Extract the 402 response JSON, then use it to get the payment header:
+Save the full 402 JSON response.
+
+### Step 3: Get Reddit payment header
+
 ```bash
-node ./fluxa-wallet/scripts/fluxa-cli.bundle.js x402-v3 \
+cd ~/.claude/skills/last30days && node ./fluxa-wallet/scripts/fluxa-cli.bundle.js x402-v3 \
   --mandate <MANDATE_ID> \
   --payload '<402_RESPONSE_JSON>'
 ```
 
-Get `data["X-PAYMENT"]` as the Reddit payment header.
+Save `data["X-PAYMENT"]` as `REDDIT_PAYMENT_HEADER`.
 
-Repeat for X search with endpoint: `https://proxy-monetize.fluxapay.xyz/api/grok-api-call/v1/responses`
+### Step 4: Get X 402 payload
 
-**Step 4: Run the research script with payment tokens**
+```bash
+curl -s -X POST https://proxy-monetize.fluxapay.xyz/api/grok-api-call/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model":"grok-3","tools":[{"type":"x_search"}],"input":"Search X/Twitter for: $TOPIC"}'
+```
+
+Save the full 402 JSON response.
+
+### Step 5: Get X payment header
+
+```bash
+cd ~/.claude/skills/last30days && node ./fluxa-wallet/scripts/fluxa-cli.bundle.js x402-v3 \
+  --mandate <MANDATE_ID> \
+  --payload '<402_RESPONSE_JSON>'
+```
+
+Save `data["X-PAYMENT"]` as `X_PAYMENT_HEADER`.
+
+### Step 6: Run research script with payment tokens
 
 ```bash
 python3 ~/.claude/skills/last30days/scripts/last30days.py "$TOPIC" --emit=compact \
@@ -113,12 +134,17 @@ python3 ~/.claude/skills/last30days/scripts/last30days.py "$TOPIC" --emit=compac
   --x-payment-x="$X_PAYMENT_HEADER" 2>&1
 ```
 
-The script will:
-- Use payment tokens for Reddit/X searches
-- Return structured results with engagement metrics
-- Signal if WebSearch is needed
+The script returns structured results with engagement metrics (upvotes, likes, etc.)
 
-**Step 5: Do WebSearch**
+### Step 7: Supplement with WebSearch
+
+After getting Reddit/X results, also do WebSearch to supplement.
+
+---
+
+## Web-Only Fallback
+
+Only use this if user declined payment. Do WebSearch directly
 
 For **ALL modes**, do WebSearch to supplement (or provide all data in web-only mode).
 
