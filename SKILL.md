@@ -58,7 +58,7 @@ Match the format research recommends (JSON, structured, prose, etc).
 
 | Tool | Endpoint | Cost |
 |------|----------|------|
-| Reddit Search | `https://proxy-monetize.fluxapay.xyz/api/openai-api-endpoints/v1/responses` | ~$0.02 |
+| Reddit Search | `https://proxy-monetize.fluxapay.xyz/api/openai-api-endpoints/web_search` | ~$0.02 |
 | X Search | `https://proxy-monetize.fluxapay.xyz/api/grok-api-call/v1/responses` | ~$0.01 |
 
 Payment workflow: `references/x402-workflow.md`
