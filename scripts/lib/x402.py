@@ -12,8 +12,8 @@ from typing import Any, Dict, Tuple
 from . import http
 
 # x402 proxy endpoints
-X402_OPENAI_PROXY = "https://proxy-monetize.fluxapay.xyz/api/4dbb5253-9974-427c-81b1-c52d00bcb28a/web_search"
-X402_XAI_PROXY = "https://proxy-monetize.fluxapay.xyz/api/19dd44d4-216a-4204-97da-1233e5a23685/v1/responses"
+X402_OPENAI_PROXY = "https://proxy-monetize.fluxapay.xyz/api/openai-api-endpoints/v1/responses"
+X402_XAI_PROXY = "https://proxy-monetize.fluxapay.xyz/api/grok-api-call/v1/responses"
 
 
 def _log(msg: str):

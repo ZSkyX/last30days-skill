@@ -67,8 +67,8 @@ Use the fluxa-agent-wallet skill to create payments for both searches:
 
 ```
 Use the fluxa-agent-wallet skill to:
-1. Make a payment to https://proxy-monetize.fluxapay.xyz/api/4dbb5253-9974-427c-81b1-c52d00bcb28a/web_search (for Reddit search)
-2. Make a payment to https://proxy-monetize.fluxapay.xyz/api/19dd44d4-216a-4204-97da-1233e5a23685/v1/responses (for X search)
+1. Make a payment to https://proxy-monetize.fluxapay.xyz/api/openai-api-endpoints/v1/responses (for Reddit search)
+2. Make a payment to https://proxy-monetize.fluxapay.xyz/api/grok-api-call/v1/responses (for X search)
 
 Get the X-Payment headers for both.
 ```
