@@ -35,7 +35,7 @@ class TestRenderCompact(unittest.TestCase):
             range_from="2026-01-01",
             range_to="2026-01-31",
             generated_at="2026-01-31T12:00:00Z",
-            mode="reddit-only",
+            mode="reddit",
             reddit=[
                 schema.RedditItem(
                     id="R1",
@@ -56,18 +56,22 @@ class TestRenderCompact(unittest.TestCase):
         self.assertIn("Test Thread", result)
         self.assertIn("r/test", result)
 
-    def test_shows_coverage_tip_for_reddit_only(self):
+    def test_reddit_only_mode_renders_correctly(self):
+        """Test that reddit-only mode renders without X posts section."""
         report = schema.Report(
             topic="test",
             range_from="2026-01-01",
             range_to="2026-01-31",
             generated_at="2026-01-31T12:00:00Z",
-            mode="reddit-only",
+            mode="reddit",
         )
 
         result = render.render_compact(report)
 
-        self.assertIn("xAI key", result)
+        # Should show the mode
+        self.assertIn("reddit", result)
+        # Should have Reddit section header
+        self.assertIn("Reddit Threads", result)
 
 
 class TestRenderContextSnippet(unittest.TestCase):

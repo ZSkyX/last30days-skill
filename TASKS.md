@@ -7,7 +7,7 @@
 - [x] Write SKILL.md with proper frontmatter
 
 ## Core Library Modules
-- [x] scripts/lib/env.py - Environment and API key loading
+- [x] scripts/lib/env.py - Configuration and model preferences
 - [x] scripts/lib/dates.py - Date range and confidence utilities
 - [x] scripts/lib/cache.py - TTL-based caching
 - [x] scripts/lib/http.py - HTTP client with retry

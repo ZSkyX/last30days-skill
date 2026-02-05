@@ -2,16 +2,16 @@
 
 ## Overview
 
-Add Claude's built-in WebSearch tool as a third research source for `/last30days`. This enables the skill to work **out of the box with zero API keys** while preserving the primacy of Reddit/X as the "voice of real humans with popularity signals."
+Add Claude's built-in WebSearch tool as a third research source for `/last30days`. This enables the skill to work **out of the box without x402 payment** while preserving the primacy of Reddit/X as the "voice of real humans with popularity signals."
 
 **Key principle**: WebSearch is supplementary, not primary. Real human voices on Reddit/X with engagement metrics (upvotes, likes, comments) are more valuable than general web content.
 
 ## Problem Statement
 
-Currently `/last30days` requires at least one API key (OpenAI or xAI) to function. Users without API keys get an error. Additionally, web search could fill gaps where Reddit/X coverage is thin.
+The skill should work even without x402 payment tokens (web-only mode). Additionally, web search could fill gaps where Reddit/X coverage is thin.
 
 **User requirements**:
-- Work out of the box (no API key needed)
+- Work out of the box (no x402 payment needed for basic functionality)
 - Must NOT overpower Reddit/X results
 - Needs proper weighting
 - Validate with before/after testing
@@ -42,12 +42,12 @@ score = 0.45*relevance + 0.25*recency + 0.30*engagement - penalties
 
 ### Mode Behavior
 
-| API Keys Available | Default Behavior | `--include-web` |
-|--------------------|------------------|-----------------|
-| None | **WebSearch only** | n/a |
-| OpenAI only | Reddit only | Reddit + WebSearch |
-| xAI only | X only | X + WebSearch |
-| Both | Reddit + X | Reddit + X + WebSearch |
+| x402 Payment | Default Behavior | `--include-web` |
+|--------------|------------------|-----------------|
+| No tokens | **WebSearch only** | n/a |
+| Reddit token only | Reddit only | Reddit + WebSearch |
+| X token only | X only | X + WebSearch |
+| Both tokens | Reddit + X | Reddit + X + WebSearch |
 
 **CLI flag**: `--include-web` (default: false when other sources available)
 
@@ -121,7 +121,7 @@ def search_web(topic: str, from_date: str, to_date: str, depth: str = "default")
     """Search web using Claude's built-in WebSearch tool.
 
     NOTE: This runs INSIDE Claude Code, so we use the WebSearch tool directly.
-    No API key needed - uses Claude's session.
+    No x402 payment needed - uses Claude's session.
     """
     # Implementation uses Claude's web_search_20250305 tool
     pass
@@ -257,28 +257,19 @@ parser.add_argument(
     help="Include general web search alongside Reddit/X (lower weighted)",
 )
 
-# scripts/lib/env.py - UPDATE get_available_sources()
+# Source selection based on x402 payment tokens
 
-def get_available_sources(config: dict) -> str:
-    """Determine available sources. WebSearch always available (no API key)."""
-    has_openai = bool(config.get('OPENAI_API_KEY'))
-    has_xai = bool(config.get('XAI_API_KEY'))
-
-    if has_openai and has_xai:
-        return 'both'  # WebSearch available but not default
-    elif has_openai:
-        return 'reddit'
-    elif has_xai:
-        return 'x'
-    else:
-        return 'web'  # Fallback: WebSearch only (no keys needed)
+# Note: Source selection is now based on x402 payment tokens passed via CLI:
+# --x-payment-reddit for Reddit search
+# --x-payment-x for X search
+# If no tokens provided, falls back to web-only mode
 ```
 
 ## Acceptance Criteria
 
 ### Functional Requirements
 
-- [x] Skill works with zero API keys (WebSearch-only mode)
+- [x] Skill works without x402 payment tokens (WebSearch-only mode)
 - [x] `--include-web` flag adds WebSearch to Reddit/X searches
 - [x] WebSearch items have lower average scores than Reddit/X items with similar relevance
 - [x] WebSearch results exclude Reddit/X URLs (handled separately)
@@ -349,15 +340,15 @@ def test_websearch_weighting():
 
 | Scenario | Expected Outcome |
 |----------|------------------|
-| No API keys, run `/last30days AI tools` | WebSearch-only results, useful output |
-| Both keys + `--include-web`, run `/last30days react` | Mix of all 3 sources, Reddit/X dominate top 10 |
+| No x402 payment tokens, run `/last30days AI tools` | WebSearch-only results, useful output |
+| Both payment tokens + `--include-web`, run `/last30days react` | Mix of all 3 sources, Reddit/X dominate top 10 |
 | Niche topic (no Reddit/X coverage) | WebSearch fills gap, becomes primary |
 | Popular topic (lots of Reddit/X) | WebSearch present but lower-ranked |
 
 ## Dependencies & Prerequisites
 
 - Claude Code's WebSearch tool (`web_search_20250305`) - already available
-- No new API keys required
+- x402 payment via FluxA Agent Wallet for Reddit/X searches (optional)
 - Existing test infrastructure in `tests/`
 
 ## Risk Analysis & Mitigation
@@ -379,10 +370,11 @@ def test_websearch_weighting():
 ## References
 
 ### Internal References
-- Scoring algorithm: `scripts/lib/score.py:8-15`
-- Source detection: `scripts/lib/env.py:57-72`
-- Schema patterns: `scripts/lib/schema.py:76-138`
-- Orchestrator: `scripts/last30days.py:54-164`
+- Scoring algorithm: `scripts/lib/score.py`
+- Configuration: `scripts/lib/env.py`
+- Schema patterns: `scripts/lib/schema.py`
+- Orchestrator: `scripts/last30days.py`
+- x402 payments: `scripts/lib/x402.py`
 
 ### External References
 - Claude WebSearch docs: https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool

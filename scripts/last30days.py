@@ -389,11 +389,11 @@ def main():
     elif sources == "both":
         mode = "both"  # reddit + x
     elif sources == "reddit":
-        mode = "reddit-only"
+        mode = "reddit"
     elif sources == "reddit-web":
         mode = "reddit-web"
     elif sources == "x":
-        mode = "x-only"
+        mode = "x"
     elif sources == "x-web":
         mode = "x-web"
     elif sources == "web":

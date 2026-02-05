@@ -90,13 +90,13 @@ The script will automatically:
 - Fall back to web-only mode if no tokens provided
 - Signal if WebSearch is needed
 
-**Step 3: Check the output mode**
+**Step 2: Check the output mode**
 
 The script output will indicate the mode:
-- **"Mode: both"** or **"Mode: reddit-only"** or **"Mode: x-only"**: Script found results, WebSearch is supplementary
-- **"Mode: web-only"**: No payment tokens, Claude must do ALL research via WebSearch
+- **"Mode: both"** or **"Mode: reddit"** or **"Mode: x"**: Script found results, WebSearch is supplementary
+- **"Mode: web-only"**: No x402 payment tokens, Claude must do ALL research via WebSearch
 
-**Step 4: Do WebSearch**
+**Step 3: Do WebSearch**
 
 For **ALL modes**, do WebSearch to supplement (or provide all data in web-only mode).
 
@@ -132,7 +132,7 @@ For ALL query types:
 - INCLUDE: blogs, tutorials, docs, news, GitHub repos
 - **DO NOT output "Sources:" list** - this is noise, we'll show stats at the end
 
-**Step 5: Wait for background script to complete**
+**Step 3: Wait for background script to complete**
 Use TaskOutput to get the script results before proceeding to synthesis.
 
 **Depth options** (passed through from user's command):
@@ -230,7 +230,7 @@ KEY PATTERNS I'll use:
 
 **THEN - Stats (right before invitation):**
 
-For **full/partial mode** (has API keys):
+For **full/partial mode** (with x402 payment):
 ```
 ---
 ✅ All agents reported back!
@@ -240,14 +240,14 @@ For **full/partial mode** (has API keys):
 └─ Top voices: r/{sub1}, r/{sub2} │ @{handle1}, @{handle2} │ {web_author} on {site}
 ```
 
-For **web-only mode** (no payment tokens):
+For **web-only mode** (no x402 payment):
 ```
 ---
 ✅ Research complete!
 ├─ 🌐 Web: {n} pages │ {domains}
 └─ Top sources: {author1} on {site1}, {author2} on {site2}
 
-💡 Want engagement metrics? Install fluxa-agent-wallet for x402 payments (~$0.03/search)
+💡 Want engagement metrics? Use fluxa-agent-wallet for x402 payments (~$0.03/search)
 ```
 
 **LAST - Invitation:**
@@ -376,5 +376,5 @@ For **web-only mode**:
 
 Want another prompt? Just tell me what you're creating next.
 
-💡 Unlock Reddit & X data: Install fluxa-agent-wallet for x402 payments (~$0.03/search)
+💡 Unlock Reddit & X data: Use fluxa-agent-wallet for x402 payments (~$0.03/search)
 ```

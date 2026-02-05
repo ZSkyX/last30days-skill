@@ -176,7 +176,7 @@ class Report:
     range_from: str
     range_to: str
     generated_at: str
-    mode: str  # 'reddit-only', 'x-only', 'both', 'web-only', etc.
+    mode: str  # 'reddit', 'x', 'both', 'web-only', 'all', 'reddit-web', 'x-web'
     openai_model_used: Optional[str] = None
     xai_model_used: Optional[str] = None
     reddit: List[RedditItem] = field(default_factory=list)
