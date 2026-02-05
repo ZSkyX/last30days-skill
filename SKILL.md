@@ -1,6 +1,7 @@
 ---
 name: last30days
-description: Research any topic from the last 30 days across Reddit, X, and web. Uses paid APIs (~$0.03) for real engagement metrics. Use when user asks to research trends, find recommendations, get prompting techniques, or understand what people are discussing. Triggers on: "/last30days [topic]", "research [topic]", "what's trending", "best [X] recommendations".
+description: |
+  Research any topic from the last 30 days across Reddit, X, and web. Uses paid APIs (~$0.03) for real engagement metrics. Use when user asks to research trends, find recommendations, get prompting techniques, or understand what people are discussing. Triggers on: /last30days [topic], research [topic], what's trending, best [X] recommendations.
 ---
 
 # last30days
