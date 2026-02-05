@@ -49,9 +49,9 @@ Common patterns:
 
 ## Payment Setup (x402)
 
-This skill uses x402 payments via FluxA Agent Wallet. No API keys required.
+This skill uses x402 payments via FluxA Agent Wallet CLI. No API keys required.
 
-**Cost:** ~$0.03 per research (Reddit $0.02 + X $0.01)
+**Cost:** ~$0.03 per research (Reddit ~$0.02 + X ~$0.01)
 
 The skill works in two modes:
 1. **Full Mode** (with x402 payment): Reddit + X + WebSearch - best results with engagement metrics
@@ -61,42 +61,64 @@ The skill works in two modes:
 
 ## Research Execution
 
-**Step 1: Get x402 payment tokens using FluxA Agent Wallet**
+**Step 1: Ask user for payment consent**
 
-Use the fluxa-agent-wallet skill to create payments for both searches:
+Before making paid API calls, ask the user:
+"To search Reddit and X with real engagement metrics, I need to make a small payment (~$0.03). Continue?"
 
-```
-Use the fluxa-agent-wallet skill to:
-1. Make a payment to https://proxy-monetize.fluxapay.xyz/api/openai-api-endpoints/v1/responses (for Reddit search)
-2. Make a payment to https://proxy-monetize.fluxapay.xyz/api/grok-api-call/v1/responses (for X search)
+If user declines, skip to Step 5 (WebSearch only mode).
 
-Get the X-Payment headers for both.
-```
+**Step 2: Create budget mandate**
 
-**Step 2: Run the research script with payment tokens**
+Request a budget mandate for the research (~$0.05 to cover both searches with buffer):
+
 ```bash
-python3 ~/.claude/skills/last30days/scripts/last30days.py "$ARGUMENTS" --emit=compact \
-  --x-payment-reddit="$REDDIT_PAYMENT_TOKEN" \
-  --x-payment-x="$X_PAYMENT_TOKEN" 2>&1
+node ./fluxa-wallet/scripts/fluxa-cli.bundle.js mandate-create \
+  --desc "Research topic on Reddit and X" \
+  --amount 50000
 ```
 
-If payment tokens are not available, run without them (web-only mode):
+Save the `mandateId` from the response. Ask user to approve the mandate at the provided URL.
+
+Wait ~10 seconds, then check status:
 ```bash
-python3 ~/.claude/skills/last30days/scripts/last30days.py "$ARGUMENTS" --emit=compact 2>&1
+node ./fluxa-wallet/scripts/fluxa-cli.bundle.js mandate-status --id <mandate-id>
 ```
 
-The script will automatically:
-- Use payment tokens if provided for Reddit/X searches
-- Fall back to web-only mode if no tokens provided
+**Step 3: Get 402 payload and make payments**
+
+For Reddit search, first get the 402 payload:
+```bash
+curl -s -X POST https://proxy-monetize.fluxapay.xyz/api/openai-api-endpoints/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o","tools":[{"type":"web_search","filters":{"allowed_domains":["reddit.com"]}}],"input":"Search Reddit for: TOPIC"}'
+```
+
+Extract the 402 response JSON, then use it to get the payment header:
+```bash
+node ./fluxa-wallet/scripts/fluxa-cli.bundle.js x402-v3 \
+  --mandate <MANDATE_ID> \
+  --payload '<402_RESPONSE_JSON>'
+```
+
+Get `data["X-PAYMENT"]` as the Reddit payment header.
+
+Repeat for X search with endpoint: `https://proxy-monetize.fluxapay.xyz/api/grok-api-call/v1/responses`
+
+**Step 4: Run the research script with payment tokens**
+
+```bash
+python3 ~/.claude/skills/last30days/scripts/last30days.py "$TOPIC" --emit=compact \
+  --x-payment-reddit="$REDDIT_PAYMENT_HEADER" \
+  --x-payment-x="$X_PAYMENT_HEADER" 2>&1
+```
+
+The script will:
+- Use payment tokens for Reddit/X searches
+- Return structured results with engagement metrics
 - Signal if WebSearch is needed
 
-**Step 2: Check the output mode**
-
-The script output will indicate the mode:
-- **"Mode: both"** or **"Mode: reddit"** or **"Mode: x"**: Script found results, WebSearch is supplementary
-- **"Mode: web-only"**: No x402 payment tokens, Claude must do ALL research via WebSearch
-
-**Step 3: Do WebSearch**
+**Step 5: Do WebSearch**
 
 For **ALL modes**, do WebSearch to supplement (or provide all data in web-only mode).
 
@@ -376,5 +398,31 @@ For **web-only mode**:
 
 Want another prompt? Just tell me what you're creating next.
 
-💡 Unlock Reddit & X data: Use fluxa-agent-wallet for x402 payments (~$0.03/search)
+💡 Unlock Reddit & X data: Run with x402 payments (~$0.03/search) for engagement metrics
 ```
+
+---
+
+# tools
+
+* Reddit Search (OpenAI web_search)
+  * name: pay-per-use OpenAI web_search for Reddit
+  * access: agent-pay
+  * endpoint: https://proxy-monetize.fluxapay.xyz/api/openai-api-endpoints/v1/responses
+  * cost: ~$0.02 per search
+
+* X Search (xAI x_search)
+  * name: pay-per-use xAI x_search for X/Twitter
+  * access: agent-pay
+  * endpoint: https://proxy-monetize.fluxapay.xyz/api/grok-api-call/v1/responses
+  * cost: ~$0.01 per search
+
+* Make x402 payment: see ./fluxa-wallet/x402-payment.md
+
+# notes for tools use
+
+* Tools with access **agent-pay** are pay-per-use (~$0.03 total for both searches)
+* Before first use, inform user: "To search Reddit and X with real engagement metrics, I need to make a small payment (~$0.03). Continue?"
+* If user declines, fall back to WebSearch only mode (no engagement metrics)
+* For error handling during payment flow, see ./fluxa-wallet/error-handle.md
+* If FluxA Agent ID not initialized, see ./fluxa-wallet/initialize-agent-id.md
