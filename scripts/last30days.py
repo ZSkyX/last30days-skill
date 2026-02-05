@@ -2,24 +2,28 @@
 """
 last30days - Research a topic from the last 30 days on Reddit + X.
 
+Uses x402 payment protocol via FluxA Agent Wallet for paid API calls.
+The calling agent handles mandate creation and signing.
+
 Usage:
     python3 last30days.py <topic> [options]
 
 Options:
-    --mock              Use fixtures instead of real API calls
-    --emit=MODE         Output mode: compact|json|md|context|path (default: compact)
-    --sources=MODE      Source selection: auto|reddit|x|both (default: auto)
-    --quick             Faster research with fewer sources (8-12 each)
-    --deep              Comprehensive research with more sources (50-70 Reddit, 40-60 X)
-    --debug             Enable verbose debug logging
+    --mock                      Use fixtures instead of real API calls
+    --emit=MODE                 Output mode: compact|json|md|context|path (default: compact)
+    --sources=MODE              Source selection: auto|reddit|x|both (default: auto)
+    --quick                     Faster research with fewer sources (8-12 each)
+    --deep                      Comprehensive research with more sources (50-70 Reddit, 40-60 X)
+    --debug                     Enable verbose debug logging
+    --x-payment-reddit=TOKEN    X-Payment header for Reddit search
+    --x-payment-x=TOKEN         X-Payment header for X search
 """
 
 import argparse
 import json
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 # Add lib to path
@@ -39,7 +43,6 @@ from lib import (
     schema,
     score,
     ui,
-    websearch,
     xai_x,
 )
 
@@ -55,7 +58,7 @@ def load_fixture(name: str) -> dict:
 
 def _search_reddit(
     topic: str,
-    config: dict,
+    x_payment_header: str,
     selected_models: dict,
     from_date: str,
     to_date: str,
@@ -75,7 +78,7 @@ def _search_reddit(
     else:
         try:
             raw_openai = openai_reddit.search_reddit(
-                config["OPENAI_API_KEY"],
+                x_payment_header,
                 selected_models["openai"],
                 topic,
                 from_date,
@@ -92,33 +95,12 @@ def _search_reddit(
     # Parse response
     reddit_items = openai_reddit.parse_reddit_response(raw_openai or {})
 
-    # Quick retry with simpler query if few results
-    if len(reddit_items) < 5 and not mock and not reddit_error:
-        core = openai_reddit._extract_core_subject(topic)
-        if core.lower() != topic.lower():
-            try:
-                retry_raw = openai_reddit.search_reddit(
-                    config["OPENAI_API_KEY"],
-                    selected_models["openai"],
-                    core,
-                    from_date, to_date,
-                    depth=depth,
-                )
-                retry_items = openai_reddit.parse_reddit_response(retry_raw)
-                # Add items not already found (by URL)
-                existing_urls = {item.get("url") for item in reddit_items}
-                for item in retry_items:
-                    if item.get("url") not in existing_urls:
-                        reddit_items.append(item)
-            except Exception:
-                pass
-
     return reddit_items, raw_openai, reddit_error
 
 
 def _search_x(
     topic: str,
-    config: dict,
+    x_payment_header: str,
     selected_models: dict,
     from_date: str,
     to_date: str,
@@ -138,7 +120,7 @@ def _search_x(
     else:
         try:
             raw_xai = xai_x.search_x(
-                config["XAI_API_KEY"],
+                x_payment_header,
                 selected_models["xai"],
                 topic,
                 from_date,
@@ -161,7 +143,8 @@ def _search_x(
 def run_research(
     topic: str,
     sources: str,
-    config: dict,
+    x_payment_reddit: str,
+    x_payment_x: str,
     selected_models: dict,
     from_date: str,
     to_date: str,
@@ -196,8 +179,8 @@ def run_research(
         return reddit_items, x_items, True, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error
 
     # Determine which searches to run
-    run_reddit = sources in ("both", "reddit", "all", "reddit-web")
-    run_x = sources in ("both", "x", "all", "x-web")
+    run_reddit = sources in ("both", "reddit", "all", "reddit-web") and x_payment_reddit
+    run_x = sources in ("both", "x", "all", "x-web") and x_payment_x
 
     # Run Reddit and X searches in parallel
     reddit_future = None
@@ -209,7 +192,7 @@ def run_research(
             if progress:
                 progress.start_reddit()
             reddit_future = executor.submit(
-                _search_reddit, topic, config, selected_models,
+                _search_reddit, topic, x_payment_reddit, selected_models,
                 from_date, to_date, depth, mock
             )
 
@@ -217,7 +200,7 @@ def run_research(
             if progress:
                 progress.start_x()
             x_future = executor.submit(
-                _search_x, topic, config, selected_models,
+                _search_x, topic, x_payment_x, selected_models,
                 from_date, to_date, depth, mock
             )
 
@@ -312,6 +295,14 @@ def main():
         action="store_true",
         help="Include general web search alongside Reddit/X (lower weighted)",
     )
+    parser.add_argument(
+        "--x-payment-reddit",
+        help="X-Payment header for Reddit search (from FluxA Agent Wallet)",
+    )
+    parser.add_argument(
+        "--x-payment-x",
+        help="X-Payment header for X search (from FluxA Agent Wallet)",
+    )
 
     args = parser.parse_args()
 
@@ -341,55 +332,56 @@ def main():
     # Load config
     config = env.get_config()
 
-    # Check available sources
-    available = env.get_available_sources(config)
-
-    # Mock mode can work without keys
+    # Determine sources based on payment headers provided
     if args.mock:
         if args.sources == "auto":
             sources = "both"
         else:
             sources = args.sources
     else:
-        # Validate requested sources against available
-        sources, error = env.validate_sources(args.sources, available, args.include_web)
-        if error:
-            # If it's a warning about WebSearch fallback, print but continue
-            if "WebSearch fallback" in error:
-                print(f"Note: {error}", file=sys.stderr)
+        # Check what payment headers are available
+        has_reddit_payment = bool(args.x_payment_reddit)
+        has_x_payment = bool(args.x_payment_x)
+
+        if args.sources == "auto":
+            if has_reddit_payment and has_x_payment:
+                sources = "both"
+            elif has_reddit_payment:
+                sources = "reddit"
+            elif has_x_payment:
+                sources = "x"
             else:
-                print(f"Error: {error}", file=sys.stderr)
+                sources = "web"  # Fallback to web-only
+        else:
+            sources = args.sources
+            # Validate requested sources against available
+            if sources == "both" and not (has_reddit_payment and has_x_payment):
+                print("Error: --sources=both requires both --x-payment-reddit and --x-payment-x", file=sys.stderr)
                 sys.exit(1)
+            if sources == "reddit" and not has_reddit_payment:
+                print("Error: --sources=reddit requires --x-payment-reddit", file=sys.stderr)
+                sys.exit(1)
+            if sources == "x" and not has_x_payment:
+                print("Error: --sources=x requires --x-payment-x", file=sys.stderr)
+                sys.exit(1)
+
+        # Add web if requested
+        if args.include_web and sources not in ("web",):
+            if sources == "both":
+                sources = "all"
+            elif sources == "reddit":
+                sources = "reddit-web"
+            elif sources == "x":
+                sources = "x-web"
 
     # Get date range
     from_date, to_date = dates.get_date_range(30)
 
-    # Check what keys are missing for promo messaging
-    missing_keys = env.get_missing_keys(config)
-
     # Initialize progress display
     progress = ui.ProgressDisplay(args.topic, show_banner=True)
 
-    # Show promo for missing keys BEFORE research
-    if missing_keys != 'none':
-        progress.show_promo(missing_keys)
-
     # Select models
-    if args.mock:
-        # Use mock models
-        mock_openai_models = load_fixture("models_openai_sample.json").get("data", [])
-        mock_xai_models = load_fixture("models_xai_sample.json").get("data", [])
-        selected_models = models.get_models(
-            {
-                "OPENAI_API_KEY": "mock",
-                "XAI_API_KEY": "mock",
-                **config,
-            },
-            mock_openai_models,
-            mock_xai_models,
-        )
-    else:
-        selected_models = models.get_models(config)
+    selected_models = models.get_models(config)
 
     # Determine mode string
     if sources == "all":
@@ -413,7 +405,8 @@ def main():
     reddit_items, x_items, web_needed, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error = run_research(
         args.topic,
         sources,
-        config,
+        args.x_payment_reddit or "",
+        args.x_payment_x or "",
         selected_models,
         from_date,
         to_date,
@@ -475,7 +468,7 @@ def main():
         progress.show_complete(len(deduped_reddit), len(deduped_x))
 
     # Output result
-    output_result(report, args.emit, web_needed, args.topic, from_date, to_date, missing_keys)
+    output_result(report, args.emit, web_needed, args.topic, from_date, to_date)
 
 
 def output_result(
@@ -485,11 +478,10 @@ def output_result(
     topic: str = "",
     from_date: str = "",
     to_date: str = "",
-    missing_keys: str = "none",
 ):
     """Output the result based on emit mode."""
     if emit_mode == "compact":
-        print(render.render_compact(report, missing_keys=missing_keys))
+        print(render.render_compact(report))
     elif emit_mode == "json":
         print(json.dumps(report.to_dict(), indent=2))
     elif emit_mode == "md":

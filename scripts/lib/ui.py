@@ -79,53 +79,6 @@ WEB_ONLY_MESSAGES = [
     "Discovering tutorials...",
 ]
 
-# Promo message for users without API keys
-PROMO_MESSAGE = f"""
-{Colors.YELLOW}{Colors.BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{Colors.RESET}
-{Colors.YELLOW}⚡ UNLOCK THE FULL POWER OF /last30days{Colors.RESET}
-
-{Colors.DIM}Right now you're using web search only. Add API keys to unlock:{Colors.RESET}
-
-  {Colors.YELLOW}🟠 Reddit{Colors.RESET} - Real upvotes, comments, and community insights
-     └─ Add OPENAI_API_KEY (uses OpenAI's web_search for Reddit)
-
-  {Colors.CYAN}🔵 X (Twitter){Colors.RESET} - Real-time posts, likes, reposts from creators
-     └─ Add XAI_API_KEY (uses xAI's live X search)
-
-{Colors.DIM}Setup:{Colors.RESET} Edit {Colors.BOLD}~/.config/last30days/.env{Colors.RESET}
-{Colors.YELLOW}{Colors.BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{Colors.RESET}
-"""
-
-PROMO_MESSAGE_PLAIN = """
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚡ UNLOCK THE FULL POWER OF /last30days
-
-Right now you're using web search only. Add API keys to unlock:
-
-  🟠 Reddit - Real upvotes, comments, and community insights
-     └─ Add OPENAI_API_KEY (uses OpenAI's web_search for Reddit)
-
-  🔵 X (Twitter) - Real-time posts, likes, reposts from creators
-     └─ Add XAI_API_KEY (uses xAI's live X search)
-
-Setup: Edit ~/.config/last30days/.env
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-
-# Shorter promo for single missing key
-PROMO_SINGLE_KEY = {
-    "reddit": f"""
-{Colors.DIM}💡 Tip: Add {Colors.YELLOW}OPENAI_API_KEY{Colors.RESET}{Colors.DIM} to ~/.config/last30days/.env for Reddit data with real engagement metrics!{Colors.RESET}
-""",
-    "x": f"""
-{Colors.DIM}💡 Tip: Add {Colors.CYAN}XAI_API_KEY{Colors.RESET}{Colors.DIM} to ~/.config/last30days/.env for X/Twitter data with real likes & reposts!{Colors.RESET}
-""",
-}
-
-PROMO_SINGLE_KEY_PLAIN = {
-    "reddit": "\n💡 Tip: Add OPENAI_API_KEY to ~/.config/last30days/.env for Reddit data with real engagement metrics!\n",
-    "x": "\n💡 Tip: Add XAI_API_KEY to ~/.config/last30days/.env for X/Twitter data with real likes & reposts!\n",
-}
 
 # Spinner frames
 SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
@@ -291,23 +244,6 @@ class ProgressDisplay:
             sys.stderr.write(f"✓ Ready for web search ({elapsed:.1f}s)\n")
         sys.stderr.flush()
 
-    def show_promo(self, missing: str = "both"):
-        """Show promotional message for missing API keys.
-
-        Args:
-            missing: 'both', 'reddit', or 'x' - which keys are missing
-        """
-        if missing == "both":
-            if IS_TTY:
-                sys.stderr.write(PROMO_MESSAGE)
-            else:
-                sys.stderr.write(PROMO_MESSAGE_PLAIN)
-        elif missing in PROMO_SINGLE_KEY:
-            if IS_TTY:
-                sys.stderr.write(PROMO_SINGLE_KEY[missing])
-            else:
-                sys.stderr.write(PROMO_SINGLE_KEY_PLAIN[missing])
-        sys.stderr.flush()
 
 
 def print_phase(phase: str, message: str):

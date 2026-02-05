@@ -1,11 +1,14 @@
-"""xAI API client for X (Twitter) discovery."""
+"""xAI API client for X (Twitter) discovery via x402 payment proxy."""
 
 import json
 import re
 import sys
 from typing import Any, Dict, List, Optional
 
-from . import http
+from . import http, x402
+
+# Default model for X search
+DEFAULT_MODEL = "grok-4-1-fast-reasoning"
 
 
 def _log_error(msg: str):
@@ -13,8 +16,8 @@ def _log_error(msg: str):
     sys.stderr.write(f"[X ERROR] {msg}\n")
     sys.stderr.flush()
 
-# xAI uses responses endpoint with Agent Tools API
-XAI_RESPONSES_URL = "https://api.x.ai/v1/responses"
+# x402 proxy endpoint for xAI
+XAI_PROXY_URL = x402.X402_XAI_PROXY
 
 # Depth configurations: (min, max) posts to request
 DEPTH_CONFIG = {
@@ -55,44 +58,28 @@ Rules:
 - Prefer posts with substantive content, not just links"""
 
 
-def search_x(
-    api_key: str,
+def build_x_payload(
     model: str,
     topic: str,
     from_date: str,
     to_date: str,
     depth: str = "default",
-    mock_response: Optional[Dict] = None,
 ) -> Dict[str, Any]:
-    """Search X for relevant posts using xAI API with live search.
+    """Build the payload for X search.
 
     Args:
-        api_key: xAI API key
         model: Model to use
         topic: Search topic
         from_date: Start date (YYYY-MM-DD)
         to_date: End date (YYYY-MM-DD)
-        depth: Research depth - "quick", "default", or "deep"
-        mock_response: Mock response for testing
+        depth: Research depth
 
     Returns:
-        Raw API response
+        Request payload dict
     """
-    if mock_response is not None:
-        return mock_response
-
     min_items, max_items = DEPTH_CONFIG.get(depth, DEPTH_CONFIG["default"])
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-
-    # Adjust timeout based on depth (generous for API response time)
-    timeout = 90 if depth == "quick" else 120 if depth == "default" else 180
-
-    # Use Agent Tools API with x_search tool
-    payload = {
+    return {
         "model": model,
         "tools": [
             {"type": "x_search"}
@@ -111,7 +98,68 @@ def search_x(
         ],
     }
 
-    return http.post(XAI_RESPONSES_URL, payload, headers=headers, timeout=timeout)
+
+def get_x_price(
+    model: str,
+    topic: str,
+    from_date: str,
+    to_date: str,
+    depth: str = "default",
+) -> tuple:
+    """Get the x402 price for X search.
+
+    Args:
+        model: Model to use
+        topic: Search topic
+        from_date: Start date (YYYY-MM-DD)
+        to_date: End date (YYYY-MM-DD)
+        depth: Research depth
+
+    Returns:
+        Tuple of (price_atomic_units, payload, payload_402)
+    """
+    payload = build_x_payload(model, topic, from_date, to_date, depth)
+    price, payload_402 = x402.get_402_price(XAI_PROXY_URL, payload)
+    return price, payload, payload_402
+
+
+def search_x(
+    x_payment_header: str,
+    model: str,
+    topic: str,
+    from_date: str,
+    to_date: str,
+    depth: str = "default",
+    mock_response: Optional[Dict] = None,
+) -> Dict[str, Any]:
+    """Search X for relevant posts using x402 payment proxy.
+
+    Args:
+        x_payment_header: X-Payment header value (provided by calling agent)
+        model: Model to use
+        topic: Search topic
+        from_date: Start date (YYYY-MM-DD)
+        to_date: End date (YYYY-MM-DD)
+        depth: Research depth - "quick", "default", or "deep"
+        mock_response: Mock response for testing
+
+    Returns:
+        Raw API response
+    """
+    if mock_response is not None:
+        return mock_response
+
+    payload = build_x_payload(model, topic, from_date, to_date, depth)
+
+    # Adjust timeout based on depth (generous for API response time)
+    timeout = 90 if depth == "quick" else 120 if depth == "default" else 180
+
+    return x402.make_paid_request(
+        XAI_PROXY_URL,
+        x_payment_header,
+        payload,
+        timeout=timeout,
+    )
 
 
 def parse_x_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:

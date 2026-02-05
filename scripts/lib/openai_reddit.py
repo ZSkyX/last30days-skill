@@ -1,14 +1,14 @@
-"""OpenAI Responses API client for Reddit discovery."""
+"""OpenAI Responses API client for Reddit discovery via x402 payment proxy."""
 
 import json
 import re
 import sys
 from typing import Any, Dict, List, Optional
 
-from . import http
+from . import http, x402
 
-# Fallback models when the selected model isn't accessible (e.g., org not verified for GPT-5)
-MODEL_FALLBACK_ORDER = ["gpt-4o", "gpt-4o-mini"]
+# Default model for Reddit search
+DEFAULT_MODEL = "gpt-4o"
 
 
 def _log_error(msg: str):
@@ -23,24 +23,8 @@ def _log_info(msg: str):
     sys.stderr.flush()
 
 
-def _is_model_access_error(error: http.HTTPError) -> bool:
-    """Check if error is due to model access/verification issues."""
-    if error.status_code != 400:
-        return False
-    if not error.body:
-        return False
-    body_lower = error.body.lower()
-    # Check for common access/verification error messages
-    return any(phrase in body_lower for phrase in [
-        "verified",
-        "organization must be",
-        "does not have access",
-        "not available",
-        "not found",
-    ])
-
-
-OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
+# x402 proxy endpoint for OpenAI web_search
+OPENAI_PROXY_URL = x402.X402_OPENAI_PROXY
 
 # Depth configurations: (min, max) threads to request
 # Request MORE than needed since many get filtered by date
@@ -103,20 +87,87 @@ def _extract_core_subject(topic: str) -> str:
     return ' '.join(result[:3]) or topic  # Keep max 3 words
 
 
+def build_reddit_payload(
+    model: str,
+    topic: str,
+    from_date: str,
+    to_date: str,
+    depth: str = "default",
+) -> Dict[str, Any]:
+    """Build the payload for Reddit search.
+
+    Args:
+        model: Model to use
+        topic: Search topic
+        from_date: Start date (YYYY-MM-DD)
+        to_date: End date (YYYY-MM-DD)
+        depth: Research depth
+
+    Returns:
+        Request payload dict
+    """
+    min_items, max_items = DEPTH_CONFIG.get(depth, DEPTH_CONFIG["default"])
+
+    input_text = REDDIT_SEARCH_PROMPT.format(
+        topic=topic,
+        from_date=from_date,
+        to_date=to_date,
+        min_items=min_items,
+        max_items=max_items,
+    )
+
+    return {
+        "model": model,
+        "tools": [
+            {
+                "type": "web_search",
+                "filters": {
+                    "allowed_domains": ["reddit.com"]
+                }
+            }
+        ],
+        "include": ["web_search_call.action.sources"],
+        "input": input_text,
+    }
+
+
+def get_reddit_price(
+    model: str,
+    topic: str,
+    from_date: str,
+    to_date: str,
+    depth: str = "default",
+) -> tuple:
+    """Get the x402 price for Reddit search.
+
+    Args:
+        model: Model to use
+        topic: Search topic
+        from_date: Start date (YYYY-MM-DD)
+        to_date: End date (YYYY-MM-DD)
+        depth: Research depth
+
+    Returns:
+        Tuple of (price_atomic_units, payload, payload_402)
+    """
+    payload = build_reddit_payload(model, topic, from_date, to_date, depth)
+    price, payload_402 = x402.get_402_price(OPENAI_PROXY_URL, payload)
+    return price, payload, payload_402
+
+
 def search_reddit(
-    api_key: str,
+    x_payment_header: str,
     model: str,
     topic: str,
     from_date: str,
     to_date: str,
     depth: str = "default",
     mock_response: Optional[Dict] = None,
-    _retry: bool = False,
 ) -> Dict[str, Any]:
-    """Search Reddit for relevant threads using OpenAI Responses API.
+    """Search Reddit for relevant threads using x402 payment proxy.
 
     Args:
-        api_key: OpenAI API key
+        x_payment_header: X-Payment header value (provided by calling agent)
         model: Model to use
         topic: Search topic
         from_date: Start date (YYYY-MM-DD) - only include threads after this
@@ -130,60 +181,17 @@ def search_reddit(
     if mock_response is not None:
         return mock_response
 
-    min_items, max_items = DEPTH_CONFIG.get(depth, DEPTH_CONFIG["default"])
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
+    payload = build_reddit_payload(model, topic, from_date, to_date, depth)
 
     # Adjust timeout based on depth (generous for OpenAI web_search which can be slow)
     timeout = 90 if depth == "quick" else 120 if depth == "default" else 180
 
-    # Build list of models to try: requested model first, then fallbacks
-    models_to_try = [model] + [m for m in MODEL_FALLBACK_ORDER if m != model]
-
-    # Note: allowed_domains accepts base domain, not subdomains
-    # We rely on prompt to filter out developers.reddit.com, etc.
-    input_text = REDDIT_SEARCH_PROMPT.format(
-        topic=topic,
-        from_date=from_date,
-        to_date=to_date,
-        min_items=min_items,
-        max_items=max_items,
+    return x402.make_paid_request(
+        OPENAI_PROXY_URL,
+        x_payment_header,
+        payload,
+        timeout=timeout,
     )
-
-    last_error = None
-    for current_model in models_to_try:
-        payload = {
-            "model": current_model,
-            "tools": [
-                {
-                    "type": "web_search",
-                    "filters": {
-                        "allowed_domains": ["reddit.com"]
-                    }
-                }
-            ],
-            "include": ["web_search_call.action.sources"],
-            "input": input_text,
-        }
-
-        try:
-            return http.post(OPENAI_RESPONSES_URL, payload, headers=headers, timeout=timeout)
-        except http.HTTPError as e:
-            last_error = e
-            if _is_model_access_error(e):
-                _log_info(f"Model {current_model} not accessible, trying fallback...")
-                continue
-            # Non-access error, don't retry with different model
-            raise
-
-    # All models failed with access errors
-    if last_error:
-        _log_error(f"All models failed. Last error: {last_error}")
-        raise last_error
-    raise http.HTTPError("No models available")
 
 
 def parse_reddit_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:

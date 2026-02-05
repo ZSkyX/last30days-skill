@@ -10,15 +10,21 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/mvanhorn/last30days-skill.git ~/.claude/skills/last30days
+git clone https://github.com/ZSkyX/last30days-skill.git ~/.claude/skills/last30days
+```
 
-# Add your API keys
+**That's it.** No API keys required. The skill uses [x402 payments](https://x402.org) via the FluxA Agent Wallet - you'll be prompted to approve a small USDC payment (~$0.03) when you run a search.
+
+### Optional: Custom Models
+
+To customize the models used (defaults: gpt-4o, grok-4-1-fast-reasoning):
+
+```bash
 mkdir -p ~/.config/last30days
 cat > ~/.config/last30days/.env << 'EOF'
-OPENAI_API_KEY=sk-...
-XAI_API_KEY=xai-...
+OPENAI_MODEL=gpt-4o
+XAI_MODEL=grok-4-1-fast-reasoning
 EOF
-chmod 600 ~/.config/last30days/.env
 ```
 
 ## Usage
@@ -701,18 +707,27 @@ This example shows /last30days discovering **emerging developer workflows** - re
 
 ## Requirements
 
-- **OpenAI API key** - For Reddit research (uses web search)
-- **xAI API key** - For X research (optional but recommended)
+- **FluxA Agent Wallet** - For x402 payments (~$0.03 per search)
+  - Install via: https://github.com/anthropics/fluxa-agent-wallet
 
-At least one key is required.
+No API keys required. Payments are handled via x402 protocol.
 
 ## How It Works
 
 The skill uses:
+- **x402 payment protocol** - Pay-per-use via FluxA Agent Wallet (no API keys needed)
 - OpenAI's Responses API with web search to find Reddit discussions
 - xAI's API with live X search to find posts
 - Real Reddit thread enrichment for engagement metrics
 - Scoring algorithm that weighs recency, relevance, and engagement
+
+### Payment Flow
+
+1. Run `/last30days <topic>`
+2. The calling agent fetches prices from x402 proxies
+3. You approve a spending mandate (~$0.03 USDC total)
+4. Searches run in parallel using your signed mandate
+5. Results are processed and returned
 
 ---
 
