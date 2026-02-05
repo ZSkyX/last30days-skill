@@ -90,13 +90,13 @@ The script will automatically:
 - Fall back to web-only mode if no tokens provided
 - Signal if WebSearch is needed
 
-**Step 2: Check the output mode**
+**Step 3: Check the output mode**
 
 The script output will indicate the mode:
 - **"Mode: both"** or **"Mode: reddit-only"** or **"Mode: x-only"**: Script found results, WebSearch is supplementary
-- **"Mode: web-only"**: No API keys, Claude must do ALL research via WebSearch
+- **"Mode: web-only"**: No payment tokens, Claude must do ALL research via WebSearch
 
-**Step 3: Do WebSearch**
+**Step 4: Do WebSearch**
 
 For **ALL modes**, do WebSearch to supplement (or provide all data in web-only mode).
 
@@ -132,7 +132,7 @@ For ALL query types:
 - INCLUDE: blogs, tutorials, docs, news, GitHub repos
 - **DO NOT output "Sources:" list** - this is noise, we'll show stats at the end
 
-**Step 3: Wait for background script to complete**
+**Step 5: Wait for background script to complete**
 Use TaskOutput to get the script results before proceeding to synthesis.
 
 **Depth options** (passed through from user's command):
