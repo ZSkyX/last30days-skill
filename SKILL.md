@@ -45,6 +45,9 @@ Use user's exact terminology. Exclude reddit.com, x.com (covered by paid APIs).
 
 See `references/output-patterns.md` for format by query type.
 
+Ask user: "Would you like me to save this research to a markdown file?"
+- If yes: Write report to `{TOPIC}-research.md` in current directory
+
 End with invitation: "Share your vision for what you want to create and I'll write a prompt for {TARGET_TOOL}."
 
 ### 5. Write Prompts
