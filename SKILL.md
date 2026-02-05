@@ -4,8 +4,7 @@ description: Research a topic from the last 30 days on Reddit + X + Web, become 
 argument-hint: "[topic] for [tool]"
 context: fork
 agent: Explore
-disable-model-invocation: true
-allowed-tools: "Bash, Read, Write, AskUserQuestion, WebSearch"
+allowed-tools: "Bash, Read, Write, AskUserQuestion, WebSearch, Skill"
 ---
 
 # last30days: Research Any Topic from the Last 30 Days
