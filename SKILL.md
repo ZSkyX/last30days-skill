@@ -48,55 +48,47 @@ Common patterns:
 
 ---
 
-## Setup Check
+## Payment Setup (x402)
 
-The skill works in three modes based on available API keys:
+This skill uses x402 payments via FluxA Agent Wallet. No API keys required.
 
-1. **Full Mode** (both keys): Reddit + X + WebSearch - best results with engagement metrics
-2. **Partial Mode** (one key): Reddit-only or X-only + WebSearch
-3. **Web-Only Mode** (no keys): WebSearch only - still useful, but no engagement metrics
+**Cost:** ~$0.03 per research (Reddit $0.02 + X $0.01)
 
-**API keys are OPTIONAL.** The skill will work without them using WebSearch fallback.
-
-### First-Time Setup (Optional but Recommended)
-
-If the user wants to add API keys for better results:
-
-```bash
-mkdir -p ~/.config/last30days
-cat > ~/.config/last30days/.env << 'ENVEOF'
-# last30days API Configuration
-# Both keys are optional - skill works with WebSearch fallback
-
-# For Reddit research (uses OpenAI's web_search tool)
-OPENAI_API_KEY=
-
-# For X/Twitter research (uses xAI's x_search tool)
-XAI_API_KEY=
-ENVEOF
-
-chmod 600 ~/.config/last30days/.env
-echo "Config created at ~/.config/last30days/.env"
-echo "Edit to add your API keys for enhanced research."
-```
-
-**DO NOT stop if no keys are configured.** Proceed with web-only mode.
+The skill works in two modes:
+1. **Full Mode** (with x402 payment): Reddit + X + WebSearch - best results with engagement metrics
+2. **Web-Only Mode** (no payment): WebSearch only - still useful, but no engagement metrics
 
 ---
 
 ## Research Execution
 
-**IMPORTANT: The script handles API key detection automatically.** Run it and check the output to determine mode.
+**Step 1: Get x402 payment tokens using FluxA Agent Wallet**
 
-**Step 1: Run the research script**
+Use the fluxa-agent-wallet skill to create payments for both searches:
+
+```
+Use the fluxa-agent-wallet skill to:
+1. Make a payment to https://proxy-monetize.fluxapay.xyz/api/4dbb5253-9974-427c-81b1-c52d00bcb28a/web_search (for Reddit search)
+2. Make a payment to https://proxy-monetize.fluxapay.xyz/api/19dd44d4-216a-4204-97da-1233e5a23685/v1/responses (for X search)
+
+Get the X-Payment headers for both.
+```
+
+**Step 2: Run the research script with payment tokens**
+```bash
+python3 ~/.claude/skills/last30days/scripts/last30days.py "$ARGUMENTS" --emit=compact \
+  --x-payment-reddit="$REDDIT_PAYMENT_TOKEN" \
+  --x-payment-x="$X_PAYMENT_TOKEN" 2>&1
+```
+
+If payment tokens are not available, run without them (web-only mode):
 ```bash
 python3 ~/.claude/skills/last30days/scripts/last30days.py "$ARGUMENTS" --emit=compact 2>&1
 ```
 
 The script will automatically:
-- Detect available API keys
-- Show a promo banner if keys are missing (this is intentional marketing)
-- Run Reddit/X searches if keys exist
+- Use payment tokens if provided for Reddit/X searches
+- Fall back to web-only mode if no tokens provided
 - Signal if WebSearch is needed
 
 **Step 2: Check the output mode**
@@ -249,16 +241,14 @@ For **full/partial mode** (has API keys):
 └─ Top voices: r/{sub1}, r/{sub2} │ @{handle1}, @{handle2} │ {web_author} on {site}
 ```
 
-For **web-only mode** (no API keys):
+For **web-only mode** (no payment tokens):
 ```
 ---
 ✅ Research complete!
 ├─ 🌐 Web: {n} pages │ {domains}
 └─ Top sources: {author1} on {site1}, {author2} on {site2}
 
-💡 Want engagement metrics? Add API keys to ~/.config/last30days/.env
-   - OPENAI_API_KEY → Reddit (real upvotes & comments)
-   - XAI_API_KEY → X/Twitter (real likes & reposts)
+💡 Want engagement metrics? Install fluxa-agent-wallet for x402 payments (~$0.03/search)
 ```
 
 **LAST - Invitation:**
@@ -387,5 +377,5 @@ For **web-only mode**:
 
 Want another prompt? Just tell me what you're creating next.
 
-💡 Unlock Reddit & X data: Add API keys to ~/.config/last30days/.env
+💡 Unlock Reddit & X data: Install fluxa-agent-wallet for x402 payments (~$0.03/search)
 ```
